@@ -68,6 +68,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("imgui-java-src/imgui-binding/build/jni/ImGuiFileDialog.cpp")
+          if not p.is_file():
+              raise SystemExit("Missing generated ImGuiFileDialog.cpp")
+          original = p.read_text(encoding="utf-8")
+          pattern = re.compile(r'(?m)^([ \t]*#[ \t]*include[ \t]*)"dirent/dirent\.h"([ \t]*(?://[^\n]*)?)$')
+          patched, count = pattern.subn(r'\1<dirent.h>\2', original)
+          if count != 1:
+              raise SystemExit(
+                  f"Expected one Windows-only dirent include, found {count}; "
+                  "upstream source may have changed, stopping safely."
+              )
+          p.write_text(patched, encoding="utf-8")
+          assert '#include <dirent.h>' in patched
+          assert '#include "dirent/dirent.h"' not in patched
+          print("Android fix: ImGuiFileDialog uses NDK <dirent.h>; removed Windows-only header.")
+          PY
+
           mkdir -p fcl-cmake
           cat > fcl-cmake/CMakeLists.txt <<'CMAKE'
           cmake_minimum_required(VERSION 3.18)
@@ -82,7 +102,7 @@ jobs:
           endif()
           message(STATUS "Compiling ${SOURCE_COUNT} ImGui 1.86.12 sources")
           add_library(imgui-java64 SHARED ${JNI_SOURCES})
-          target_include_directories(imgui-java64 PRIVATE "${JNI_DIR}" "${JNI_DIR}/dirent")
+          target_include_directories(imgui-java64 PRIVATE "${JNI_DIR}")
           set_target_properties(imgui-java64 PROPERTIES
               CXX_STANDARD 14
               CXX_STANDARD_REQUIRED YES
