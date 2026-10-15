@@ -118,6 +118,28 @@ jobs:
           p.write_text(source, encoding="utf-8")
           print("Fixed both ImPlot format-security errors with literal '%s'.")
           PY
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("imgui-java-src/imgui-binding/build/jni/jni_jvm.cpp")
+          if not p.is_file():
+              raise SystemExit("Missing generated jni_jvm.cpp")
+
+          source = p.read_text(encoding="utf-8")
+          needle = "JNI_VERSION_1_8"
+          found = source.count(needle)
+          if found != 1:
+              raise SystemExit(
+                  f"Expected one JNI 1.8 GetEnv version token; found {found}. "
+                  "Stop rather than patch unexpected source."
+              )
+
+          source = source.replace(needle, "JNI_VERSION_1_6", 1)
+          p.write_text(source, encoding="utf-8")
+          assert "JNI_VERSION_1_8" not in source
+          assert "JNI_VERSION_1_6" in source
+          print("Android JNI fix: JavaVM::GetEnv now requests JNI_VERSION_1_6.")
+          PY
           mkdir -p fcl-cmake
           cat > fcl-cmake/CMakeLists.txt <<'CMAKE'
           cmake_minimum_required(VERSION 3.18)
