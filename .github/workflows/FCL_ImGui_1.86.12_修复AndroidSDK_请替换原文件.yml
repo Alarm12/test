@@ -88,6 +88,36 @@ jobs:
           print("Android fix: ImGuiFileDialog uses NDK <dirent.h>; removed Windows-only header.")
           PY
 
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("imgui-java-src/imgui-binding/build/jni/imgui_extension_implot_ImPlot.cpp")
+          if not p.is_file():
+              raise SystemExit("Missing generated ImPlot JNI C++ source")
+
+          source = p.read_text(encoding="utf-8")
+          changes = [
+              (
+                  "ImPlot::Annotate(x, y, pixOffset, col, a);",
+                  'ImPlot::Annotate(x, y, pixOffset, col, "%s", a);',
+              ),
+              (
+                  "ImPlot::AnnotateClamped(x, y, pixOffset, col, a);",
+                  'ImPlot::AnnotateClamped(x, y, pixOffset, col, "%s", a);',
+              ),
+          ]
+          for needle, fixed in changes:
+              matches = source.count(needle)
+              if matches != 1:
+                  raise SystemExit(
+                      f"Expected one exact occurrence of {needle!r}; found {matches}. "
+                      "Stopping rather than changing unknown upstream JNI code."
+                  )
+              source = source.replace(needle, fixed, 1)
+
+          p.write_text(source, encoding="utf-8")
+          print("Fixed both ImPlot format-security errors with literal '%s'.")
+          PY
           mkdir -p fcl-cmake
           cat > fcl-cmake/CMakeLists.txt <<'CMAKE'
           cmake_minimum_required(VERSION 3.18)
